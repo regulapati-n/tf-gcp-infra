@@ -7,7 +7,11 @@ provider "google" {
 resource "google_compute_network" "vpc_network" {
   name                    = var.vpc_name
   auto_create_subnetworks = false
+ terraform-init
   routing_mode            = "REGION"
+
+  routing_mode            = "REGIONAL"
+main
 }
 
 resource "google_compute_subnetwork" "webapp_subnet" {
@@ -17,7 +21,10 @@ resource "google_compute_subnetwork" "webapp_subnet" {
   region        = var.region
 }
 
+
 resource "google_compute_subnetwork "db_subnet" {
+resource "google_compute_subnetwork" "db_subnet" {
+
   name          = var.db_subnet_name
   network       = google_compute_network.vpc_network.self_link
   ip_cidr_range = var.db_subnet_cidr
