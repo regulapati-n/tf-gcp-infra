@@ -25,8 +25,8 @@ variable "routing_mode" {
 
 variable "auto_create_subnetworks" {
   description = "autocreate subnets(true/false)"
-  type = bool
-  
+  type        = bool
+
 }
 variable "delete_default_route" {
   description = "Whether to delete default routes on network creation"
@@ -141,4 +141,50 @@ variable "compute_instance_tags" {
 variable "network_tier" {
   description = "Network tier for the compute instance"
   type        = string
+}
+
+variable "dbinstance_name" {
+  description = "Name of the database instance"
+  type = string
+}
+
+variable "db_version" {
+  description = "Type of database and database version"
+  type = "string"
+}
+
+variable "db_tier" {
+  description = "Type of database instance"
+  type = "string"
+}
+
+variable "disk_type" {
+  description = "type of disk"
+  type = "string"
+}
+
+variable "disk_size" {
+  description = "Size of the disk to create"
+  type = "string"
+}
+
+variable "db_availability" {
+  description = "availability type for the sql instance"
+  type = "string"
+}
+
+variable "db_delete" {
+  description = "deletion protection for the sql instance"
+  type = bool
+}
+
+variable "db_name" {
+  description = "name of the database"
+  type = "string"
+}
+
+variable "address_type" {
+  description = "type of address"
+  type = "string"
+  default = "INTERNAL
 }
