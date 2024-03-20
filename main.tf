@@ -75,8 +75,8 @@ resource "google_compute_firewall" "private_vpc_ssh_firewall" {
 }
 
 resource "google_service_account" "service_account" {
-  account_id   = "webapp-sa"
-  display_name = "Custom SA for VM Instance"
+  account_id   = var.sa_id
+  display_name = var.sa_name
 }
 
 resource "google_project_iam_binding" "logging_admin_binding" {
@@ -184,15 +184,15 @@ resource "google_sql_user" "database_user" {
 }
 
 data "google_dns_managed_zone" "nixor_zone" {
-  name = "nixor"
+  name = var.dns_zone_name
 
 }
 
 resource "google_dns_record_set" "webapp_record" {
   managed_zone = data.google_dns_managed_zone.nixor_zone.name
   name         = data.google_dns_managed_zone.nixor_zone.dns_name # Empty string for root domain
-  type         = "A"
-  ttl          = 300
+  type         = var.dns_record_type
+  ttl          = var.dns_ttl
   rrdatas = [
     google_compute_instance.webapp_instance.network_interface[0].access_config[0].nat_ip
   ]

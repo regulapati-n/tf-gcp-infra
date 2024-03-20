@@ -188,3 +188,28 @@ variable "address_type" {
   type        = string
   default     = "INTERNAL"
 }
+
+variable "sa_id" {
+  description = "name of service id"
+  type        = string
+}
+
+variable "sa_name" {
+  description = "service account name"
+  type        = string
+}
+
+variable "dns_zone_name" {
+  description = "Cloud DNS zone Name"
+  type        = string
+}
+
+variable "dns_record_type" {
+  description = "Cloud DNS record type"
+  type        = string
+}
+
+variable "dns_ttl" {
+  description = "dns record TTL"
+  type = string
+}
