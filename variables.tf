@@ -145,46 +145,46 @@ variable "network_tier" {
 
 variable "dbinstance_name" {
   description = "Name of the database instance"
-  type = string
+  type        = string
 }
 
 variable "db_version" {
   description = "Type of database and database version"
-  type = string
+  type        = string
 }
 
 variable "db_tier" {
   description = "Type of database instance"
-  type = string
+  type        = string
 }
 
 variable "disk_type" {
   description = "type of disk"
-  type = string
+  type        = string
 }
 
 variable "disk_size" {
   description = "Size of the disk to create"
-  type = string
+  type        = string
 }
 
 variable "db_availability" {
   description = "availability type for the sql instance"
-  type = string
+  type        = string
 }
 
 variable "db_delete" {
   description = "deletion protection for the sql instance"
-  type = bool
+  type        = bool
 }
 
 variable "db_name" {
   description = "name of the database"
-  type = string
+  type        = string
 }
 
 variable "address_type" {
   description = "type of address"
-  type = string
-  default = "INTERNAL"
+  type        = string
+  default     = "INTERNAL"
 }

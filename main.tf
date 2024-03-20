@@ -74,12 +74,41 @@ resource "google_compute_firewall" "private_vpc_ssh_firewall" {
   target_tags = var.webapp_firewall_target_tags
 }
 
+resource "google_service_account" "service_account" {
+  account_id   = "webapp-sa"
+  display_name = "Custom SA for VM Instance"
+}
+
+resource "google_project_iam_binding" "logging_admin_binding" {
+  project = var.project_id
+  role    = "roles/logging.admin"
+
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}"
+  ]
+}
+
+resource "google_project_iam_binding" "monitoring_metric_writer_binding" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}"
+  ]
+}
+
 resource "google_compute_instance" "webapp_instance" {
   name         = var.compute_instance_name
   machine_type = var.machine_type
   zone         = var.zone
 
   tags = var.compute_instance_tags
+
+  service_account {
+    email  = google_service_account.service_account.email
+    scopes = ["cloud-platform"]
+  }
+
 
   boot_disk {
     initialize_params {
@@ -103,8 +132,7 @@ resource "google_compute_instance" "webapp_instance" {
     echo "spring.datasource.url=jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true" >> /opt/csye6225/application.properties
     echo "spring.datasource.username=webapp" >> /opt/csye6225/application.properties
     echo "spring.datasource.password=${random_password.user_password.result}" >> /opt/csye6225/application.properties
-    echo "spring.jpa.hibernate.ddl-auto=create-drop" >> /opt/csye6225/application.properties
-    echo "spring.jpa.show-sql=true" >> /opt/csye6225/application.properties
+    echo "spring.jpa.hibernate.ddl-auto=update" >> /opt/csye6225/application.properties
     echo "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect" >> /opt/csye6225/application.properties
   EOF
 }
@@ -155,5 +183,18 @@ resource "google_sql_user" "database_user" {
   depends_on = [google_sql_database_instance.my_db_instance]
 }
 
+data "google_dns_managed_zone" "nixor_zone" {
+  name = "nixor"
 
+}
 
+resource "google_dns_record_set" "webapp_record" {
+  managed_zone = data.google_dns_managed_zone.nixor_zone.name
+  name         = data.google_dns_managed_zone.nixor_zone.dns_name # Empty string for root domain
+  type         = "A"
+  ttl          = 300
+  rrdatas = [
+    google_compute_instance.webapp_instance.network_interface[0].access_config[0].nat_ip
+  ]
+  depends_on = [google_compute_instance.webapp_instance]
+}
