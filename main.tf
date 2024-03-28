@@ -75,8 +75,8 @@ resource "google_compute_firewall" "private_vpc_ssh_firewall" {
 }
 
 resource "google_service_account" "service_account" {
-  account_id   = var.sa_id
-  display_name = var.sa_name
+  account_id   = "webapp-sa"
+  display_name = "Custom SA for VM Instance"
 }
 
 resource "google_project_iam_binding" "logging_admin_binding" {
@@ -134,6 +134,8 @@ resource "google_compute_instance" "webapp_instance" {
     echo "spring.datasource.password=${random_password.user_password.result}" >> /opt/csye6225/application.properties
     echo "spring.jpa.hibernate.ddl-auto=update" >> /opt/csye6225/application.properties
     echo "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect" >> /opt/csye6225/application.properties
+    echo "projectId=dev-demo-415618" >> /opt/csye6225/application.properties
+    echo "topicId=verify_email" >> /opt/csye6225/application.properties
   EOF
 }
 
@@ -184,17 +186,134 @@ resource "google_sql_user" "database_user" {
 }
 
 data "google_dns_managed_zone" "nixor_zone" {
-  name = var.dns_zone_name
+  name = "nixor"
 
 }
 
 resource "google_dns_record_set" "webapp_record" {
   managed_zone = data.google_dns_managed_zone.nixor_zone.name
   name         = data.google_dns_managed_zone.nixor_zone.dns_name # Empty string for root domain
-  type         = var.dns_record_type
-  ttl          = var.dns_ttl
+  type         = "A"
+  ttl          = 300
   rrdatas = [
     google_compute_instance.webapp_instance.network_interface[0].access_config[0].nat_ip
   ]
   depends_on = [google_compute_instance.webapp_instance]
 }
+
+resource "google_storage_bucket" "webapp_bucket" {
+  name     = "nixor-bucket"
+  location = "US"
+}
+
+resource "google_pubsub_topic" "verify_email" {
+  name = "verify_email"
+  labels = {
+    foo = "bar"
+  }
+  message_retention_duration = "6048s"
+}
+
+
+resource "google_pubsub_subscription" "webapp_subscription" {
+  name                 = "webapp-subscription"
+  topic                = google_pubsub_topic.verify_email.id
+  ack_deadline_seconds = 20
+}
+
+resource "google_project_iam_binding" "creator" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+  ]
+}
+
+resource "google_storage_bucket_object" "archive" {
+  name   = "function"
+  bucket = google_storage_bucket.webapp_bucket.name
+  source = "/Users/nikhilregulapati/Desktop/function-source-3/Archive.zip"
+}
+
+resource "google_cloudfunctions2_function" "cloud_function" {
+  name        = "cloudfunction"
+  location    = var.region
+  description = "abcd"
+
+  depends_on = [google_vpc_access_connector.serverlessvpc, google_sql_database_instance.my_db_instance]
+  build_config {
+    runtime     = "java17"
+    entry_point = "gcfv2pubsub.PubSubFunction"
+
+    source {
+      storage_source {
+        bucket = google_storage_bucket.webapp_bucket.name
+        object = google_storage_bucket_object.archive.name
+      }
+    }
+  }
+
+  service_config {
+    min_instance_count               = 0
+    max_instance_count               = 1
+    available_memory                 = "2Gi"
+    max_instance_request_concurrency = 10
+    available_cpu                    = "2"
+    service_account_email            = google_service_account.cloudfunction_service.email
+    environment_variables = {
+      dbUrl    = "jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true"
+      dbName   = google_sql_database.database.name
+      dbPass   = "${random_password.user_password.result}"
+      api_key  = var.apiKey
+    }
+    vpc_connector                 = "projects/${var.project_id}/locations/${var.region}/connectors/${google_vpc_access_connector.serverlessvpc.name}"
+    vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
+
+  }
+
+
+  #  vpc
+  event_trigger {
+    trigger_region = var.region
+    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic   = google_pubsub_topic.verify_email.id
+    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+  }
+}
+resource "google_project_iam_binding" "pubsub_publisher_binding" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}"
+  ]
+}
+
+resource "google_vpc_access_connector" "serverlessvpc" {
+  project       = var.project_id
+  name          = "vpcconnectorx"
+  region        = var.region
+  network       = google_compute_network.vpc_network.name
+  ip_cidr_range = "10.0.8.0/28"
+}
+
+
+resource "google_service_account" "cloudfunction_service" {
+  account_id   = "cloud-sa"
+  display_name = "cloud service account"
+}
+
+resource "google_project_iam_binding" "invoker_binding" {
+  members = ["serviceAccount:${google_service_account.cloudfunction_service.email}"]
+  project = var.project_id
+  role    = "roles/run.invoker"
+}
+
+#resource "google_service_account_iam_member" "member_service" {
+#  service_account_id = google_service_account.cloudfunction_service.id
+#  role     = "roles/iam.serviceAccountUser"
+#  member = google_service_account.cloudfunction_service.email
+#}
+
+
+

@@ -211,5 +211,10 @@ variable "dns_record_type" {
 
 variable "dns_ttl" {
   description = "dns record TTL"
-  type = string
+  type        = string
+}
+
+variable "apiKey" {
+  description = "Mailgun API Key"
+  type        = string
 }
