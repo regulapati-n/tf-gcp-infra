@@ -219,6 +219,7 @@ variable "apiKey" {
   type        = string
 }
 
+
 variable "min_vm" {
   description = "Minimum active vm"
   type = string
@@ -234,7 +235,7 @@ variable "cpu_target" {
   type = string
 }
 
-variable "cool_down" {
+variable "cooldown" {
   description = "cooldown period for autoscaler"
   type = string
 }
@@ -242,6 +243,7 @@ variable "cool_down" {
 variable "target_size" {
   description = "target size for vm template"
   type = string
+
 }
 
 variable "delay_sec" {
@@ -256,4 +258,73 @@ variable "timeout_sec" {
 
 variable "named_port" {
   description = "named port for group manager"
+}
+
+variable "health_check_name" {
+  description = "value"
+  type = string
+}
+
+variable "interval_sec" {
+  description = "value"
+  type = string
+
+}
+
+variable "healthcheck_timeout" {
+  type = string
+}
+
+variable "threshold" {
+  type = string
+
+}
+
+variable "unhealthy_threshold" {
+  type = string
+
+}
+
+variable "auto_scaler_name" {
+  type = string
+
+}
+
+variable "region_instance_name" {
+  type = string
+
+}
+
+variable "url_name" {
+  type = string
+
+}
+
+variable "backend_name" {
+  type = string
+}
+
+variable "port_range" {
+  type = string
+
+}
+
+variable "ssl_name" {
+  type = string
+
+}
+
+variable "ssl_type" {
+  type = string
+
+}
+
+variable "global_name" {
+  type = string
+
+}
+
+variable "cool_down" {
+  type = string
+
 }
