@@ -97,48 +97,6 @@ resource "google_project_iam_binding" "monitoring_metric_writer_binding" {
   ]
 }
 
-resource "google_compute_instance" "webapp_instance" {
-  name         = var.compute_instance_name
-  machine_type = var.machine_type
-  zone         = var.zone
-
-  tags = var.compute_instance_tags
-
-  service_account {
-    email  = google_service_account.service_account.email
-    scopes = ["cloud-platform"]
-  }
-
-
-  boot_disk {
-    initialize_params {
-      image = var.instance_image
-      size  = var.instance_size
-      type  = var.webapp_bootdisk_type
-    }
-  }
-
-  network_interface {
-    network    = google_compute_network.vpc_network.name
-    subnetwork = google_compute_subnetwork.webapp_subnet.name
-
-    access_config {
-      network_tier = var.network_tier
-    }
-  }
-
-  metadata_startup_script = <<-EOF
-    #!/bin/bash
-    echo "spring.datasource.url=jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true" >> /opt/csye6225/application.properties
-    echo "spring.datasource.username=webapp" >> /opt/csye6225/application.properties
-    echo "spring.datasource.password=${random_password.user_password.result}" >> /opt/csye6225/application.properties
-    echo "spring.jpa.hibernate.ddl-auto=update" >> /opt/csye6225/application.properties
-    echo "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect" >> /opt/csye6225/application.properties
-    echo "projectId=dev-demo-415618" >> /opt/csye6225/application.properties
-    echo "topicId=verify_email" >> /opt/csye6225/application.properties
-  EOF
-}
-
 
 resource "google_sql_database_instance" "my_db_instance" {
   name             = var.dbinstance_name
@@ -196,9 +154,9 @@ resource "google_dns_record_set" "webapp_record" {
   type         = "A"
   ttl          = 300
   rrdatas = [
-    google_compute_instance.webapp_instance.network_interface[0].access_config[0].nat_ip
+    google_compute_global_address.webapp_ip.address
   ]
-  depends_on = [google_compute_instance.webapp_instance]
+  depends_on = [google_compute_global_address.private_ip_address]
 }
 
 resource "google_storage_bucket" "webapp_bucket" {
@@ -218,7 +176,7 @@ resource "google_pubsub_topic" "verify_email" {
 resource "google_pubsub_subscription" "webapp_subscription" {
   name                 = "webapp-subscription"
   topic                = google_pubsub_topic.verify_email.id
-  ack_deadline_seconds = 20
+  ack_deadline_seconds = 180
 }
 
 resource "google_project_iam_binding" "creator" {
@@ -230,9 +188,9 @@ resource "google_project_iam_binding" "creator" {
 }
 
 resource "google_storage_bucket_object" "archive" {
-  name   = "function"
+  name   = "function.jar"
   bucket = google_storage_bucket.webapp_bucket.name
-  source = "/Users/nikhilregulapati/Desktop/function-source-3/Archive.zip"
+  source = "/Users/nikhilregulapati/Downloads/function-source-2.zip"
 }
 
 resource "google_cloudfunctions2_function" "cloud_function" {
@@ -257,22 +215,20 @@ resource "google_cloudfunctions2_function" "cloud_function" {
     min_instance_count               = 0
     max_instance_count               = 1
     available_memory                 = "2Gi"
-    max_instance_request_concurrency = 10
+    max_instance_request_concurrency = 5
     available_cpu                    = "2"
     service_account_email            = google_service_account.cloudfunction_service.email
     environment_variables = {
-      dbUrl    = "jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true"
-      dbName   = google_sql_database.database.name
-      dbPass   = "${random_password.user_password.result}"
-      api_key  = var.apiKey
+      dbUrl   = "jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true"
+      dbName  = google_sql_database.database.name
+      dbPass  = "${random_password.user_password.result}"
+      api_key = var.apiKey
     }
     vpc_connector                 = "projects/${var.project_id}/locations/${var.region}/connectors/${google_vpc_access_connector.serverlessvpc.name}"
     vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
 
   }
 
-
-  #  vpc
   event_trigger {
     trigger_region = var.region
     event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
@@ -297,7 +253,6 @@ resource "google_vpc_access_connector" "serverlessvpc" {
   ip_cidr_range = "10.0.8.0/28"
 }
 
-
 resource "google_service_account" "cloudfunction_service" {
   account_id   = "cloud-sa"
   display_name = "cloud service account"
@@ -309,11 +264,144 @@ resource "google_project_iam_binding" "invoker_binding" {
   role    = "roles/run.invoker"
 }
 
-#resource "google_service_account_iam_member" "member_service" {
-#  service_account_id = google_service_account.cloudfunction_service.id
-#  role     = "roles/iam.serviceAccountUser"
-#  member = google_service_account.cloudfunction_service.email
-#}
+resource "google_compute_region_instance_template" "webapp_template" {
+  name_prefix  = "webapp-instance-3"
+  machine_type = var.machine_type
 
+  tags = var.compute_instance_tags
+
+  depends_on = [google_service_account.service_account]
+
+  service_account {
+    email  = google_service_account.service_account.email
+    scopes = ["cloud-platform"]
+  }
+
+  disk {
+    source_image = var.instance_image
+    type         = var.webapp_bootdisk_type
+    auto_delete  = true
+  }
+
+  network_interface {
+    network    = google_compute_network.vpc_network.name
+    subnetwork = google_compute_subnetwork.webapp_subnet.name
+
+    access_config {
+      network_tier = var.network_tier
+    }
+  }
+
+  metadata_startup_script = <<-EOF
+    #!/bin/bash
+    echo "spring.datasource.url=jdbc:mysql://${google_sql_database_instance.my_db_instance.private_ip_address}:3306/webapp?createDatabaseIfNotExist=true" >> /opt/csye6225/application.properties
+    echo "spring.datasource.username=webapp" >> /opt/csye6225/application.properties
+    echo "spring.datasource.password=${random_password.user_password.result}" >> /opt/csye6225/application.properties
+    echo "spring.jpa.hibernate.ddl-auto=update" >> /opt/csye6225/application.properties
+    echo "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect" >> /opt/csye6225/application.properties
+    echo "projectId=dev-demo-415618" >> /opt/csye6225/application.properties
+    echo "topicId=verify_email" >> /opt/csye6225/application.properties
+  EOF
+}
+
+resource "google_compute_health_check" "webapp_health_check" {
+  name                = var.health_check_name
+  check_interval_sec  = var.interval_sec
+  timeout_sec         = var.healthcheck_timeout
+  healthy_threshold   = var.threshold
+  unhealthy_threshold = var.unhealthy_threshold
+
+  http_health_check {
+    port         = 8080 # Or the port your application uses
+    request_path = "/healthz"
+  }
+}
+
+resource "google_compute_region_autoscaler" "webapp_autoscaler" {
+  name   = var.auto_scaler_name
+  region = var.region
+  target = google_compute_region_instance_group_manager.webapp_igm.id
+
+  autoscaling_policy {
+    max_replicas    = var.max_vm # Adjust as needed
+    min_replicas    = var.min_vm # Adjust as needed
+    cooldown_period = var.cool_down
+
+    cpu_utilization {
+      target = var.cpu_target # 5% Target
+    }
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "webapp_igm" {
+  name               = var.region_instance_name
+  base_instance_name = "webapp"
+  region             = "us-east4"
+
+  version {
+    instance_template = google_compute_region_instance_template.webapp_template.self_link
+  }
+  target_size = 2
+
+  named_port {
+    name = "http"
+    port = var.named_port
+  }
+  auto_healing_policies {
+    health_check      = google_compute_health_check.webapp_health_check.id
+    initial_delay_sec = 300
+  }
+}
+
+
+resource "google_compute_target_https_proxy" "webapp_target_proxy" {
+  name             = "webapp-target-proxy3"
+  url_map          = google_compute_url_map.webapp_url_map.self_link
+  ssl_certificates = [google_compute_managed_ssl_certificate.webapp_cert.id]
+}
+
+resource "google_compute_url_map" "webapp_url_map" {
+  name            = var.url_name
+  default_service = google_compute_backend_service.webapp_backend.self_link
+}
+
+output "instance_group_url" {
+  value = google_compute_region_instance_group_manager.webapp_igm.instance_group
+}
+
+resource "google_compute_backend_service" "webapp_backend" {
+  name                  = var.backend_name
+  load_balancing_scheme = "EXTERNAL"
+  health_checks         = [google_compute_health_check.webapp_health_check.id]
+  port_name             = "http"
+  protocol              = "HTTP"
+  timeout_sec           = 10
+  backend {
+    group           = google_compute_region_instance_group_manager.webapp_igm.instance_group
+    balancing_mode  = "UTILIZATION"
+    capacity_scaler = 1.0
+  }
+}
+
+resource "google_compute_global_forwarding_rule" "webapp_forwarding_rule" {
+  name       = "webapp-forwarding-rule3"
+  target     = google_compute_target_https_proxy.webapp_target_proxy.self_link
+  port_range = var.port_range
+  ip_address = google_compute_global_address.webapp_ip.address
+
+  depends_on = [google_compute_target_https_proxy.webapp_target_proxy]
+}
+
+resource "google_compute_managed_ssl_certificate" "webapp_cert" {
+  name = var.ssl_name
+  type = var.ssl_type
+  managed {
+    domains = ["nixor.me"]
+  }
+}
+
+resource "google_compute_global_address" "webapp_ip" {
+  name = var.global_name
+}
 
 
