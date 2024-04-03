@@ -218,3 +218,42 @@ variable "apiKey" {
   description = "Mailgun API Key"
   type        = string
 }
+
+variable "min_vm" {
+  description = "Minimum active vm"
+  type = string
+}
+
+variable "max_vm" {
+  description = "Maximum Vm"
+  type = string
+}
+
+variable "cpu_target" {
+  description = "cpu utilization target for VM"
+  type = string
+}
+
+variable "cool_down" {
+  description = "cooldown period for autoscaler"
+  type = string
+}
+
+variable "target_size" {
+  description = "target size for vm template"
+  type = string
+}
+
+variable "delay_sec" {
+  description = "target size"
+  type = string
+}
+
+variable "timeout_sec" {
+  description = "timeout seconds for webapp backend"
+  type = string
+}
+
+variable "named_port" {
+  description = "named port for group manager"
+}
