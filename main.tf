@@ -404,6 +404,7 @@ resource "google_compute_global_address" "webapp_ip" {
   name = var.global_name
 }
 
+
 resource "google_kms_key_ring" "my_keyring" {
   name     = var.keyring_name
   location = "us-east4"
@@ -489,5 +490,6 @@ data "google_project" "project" {
 output "project_number" {
   value = data.google_project.project.number
 }
+
 
 
