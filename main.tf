@@ -405,3 +405,91 @@ resource "google_compute_global_address" "webapp_ip" {
 }
 
 
+resource "google_kms_key_ring" "my_keyring" {
+  name     = var.keyring_name
+  location = "us-east4"
+}
+
+resource "random_string" "key_suffix" {
+  length  = 8
+  special = false
+}
+
+# CMEK  for Virtual Machines
+resource "google_kms_crypto_key" "vm_cmek" {
+  name              = "vm-encryption-key"
+  key_ring          = google_kms_key_ring.my_keyring.id
+  rotation_period   = "7776000s"
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# CMEK for Cloud SQL
+resource "google_kms_crypto_key" "sql_cmek" {
+  name              = "sql-encryption-key"
+  key_ring          = google_kms_key_ring.my_keyring.id
+  rotation_period   = "7776000s"
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# CMEK for Cloud Storage
+resource "google_kms_crypto_key" "storage_cmek" {
+  name              = "storage-encryption-key"
+  key_ring          = google_kms_key_ring.my_keyring.id
+  rotation_period   = "7776000s"
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_service_account" "kms_service_account" {
+  account_id   = "kms-service-account"
+  display_name = "kms Service Account"
+}
+
+resource "google_project_iam_binding" "kms_service_account_roles" {
+  project = var.project_id
+  role    = "roles/cloudkms.admin"
+
+  members = [
+    "serviceAccount:${google_service_account.kms_service_account.email}"
+  ]
+}
+
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  provider = google-beta
+  project = var.project_id
+  service  = "sqladmin.googleapis.com"
+}
+
+
+resource "google_kms_crypto_key_iam_binding" "cloudsql_crypto_key_binding" {
+  crypto_key_id = google_kms_crypto_key.sql_cmek.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  members       = ["serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"]
+}
+
+resource "google_kms_crypto_key_iam_binding" "storage_crypto_key_binding" {
+  crypto_key_id = google_kms_crypto_key.storage_cmek.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  members       = ["serviceAccount:service-${data.google_project.project.number}@gs-project-accounts.iam.gserviceaccount.com"]
+}
+
+resource "google_kms_crypto_key_iam_binding" "vm_crypto_key_binding" {
+  crypto_key_id = google_kms_crypto_key.vm_cmek.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  members       = ["serviceAccount:service-${data.google_project.project.number}@compute-system.iam.gserviceaccount.com"]
+}
+
+data "google_project" "project" {
+}
+
+output "project_number" {
+  value = data.google_project.project.number
+}
+
+
+

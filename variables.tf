@@ -328,3 +328,8 @@ variable "cool_down" {
   type = string
 
 }
+
+variable "keyring_name" {
+  type = string
+
+}
